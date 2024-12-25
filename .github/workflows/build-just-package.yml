@@ -1,0 +1,61 @@
+name: Build stb
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+  schedule:
+    - cron: '0 0 * * *'
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure git committer identity
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      
+    - name: Pull latest changes from tinygltf repository
+      run: |
+        git remote add stb https://github.com/nothings/stb
+        git pull stb master --rebase
+        rm -f ci-fuzz.yml
+
+    - name: Prepare Release
+      run: |
+        mkdir include
+        mv *.h include
+        zip -r just.zip include
+
+    - name: Set Release Date
+      id: set_release_date
+      run: echo "RELEASE_DATE=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_ENV
+    
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ env.RELEASE_DATE }}
+        release_name: Release ${{ env.RELEASE_DATE }}
+        draft: false
+        prerelease: false
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./just.zip
+        asset_name: just.zip
+        asset_content_type: application/zip
